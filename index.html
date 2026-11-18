@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lion Air Flight Intelligence 2026 | 3D Interactive Area Chart</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Three.js & Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+    <style>
+        :root {
+            --lion-red: #D71921;
+            --lion-red-bright: #FF2E38;
+            --lion-gold: #FFB800;
+            --lion-gold-bright: #FFD043;
+            --lion-blue: #0A84FF;
+            --bg-night: #06090e;
+            --card-glass: rgba(13, 17, 23, 0.82);
+            --card-glass-elevated: rgba(22, 27, 34, 0.92);
+            --border-glass: rgba(255, 255, 255, 0.12);
+            --border-highlight: rgba(215, 25, 33, 0.45);
+            --text-main: #f0f6fc;
+            --text-sub: #8b949e;
+            --text-dim: #484f58;
+            --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-night);
+            color: var(--text-main);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Scanline HUD effect (subtle) */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            background: radial-gradient(circle at center, transparent 40%, rgba(6, 9, 14, 0.65) 100%);
+        }
+
+        .ui-layer {
+            position: absolute;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Top Navigation Header */
+        header {
+            top: 18px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand-panel {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: var(--card-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 8px 18px 8px 10px;
+            border-radius: 18px;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+        }
+
+        .brand-avatar {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #FF2E38 0%, #D71921 50%, #870b10 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 18px rgba(215, 25, 33, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-avatar::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.3) 50%, transparent 60%);
+            animation: shine 4s infinite linear;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%); }
+            20%, 100% { transform: translateX(100%); }
+        }
+
+        .brand-meta h1 {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-meta h1 .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #2ea043;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #2ea043;
+            display: inline-block;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .brand-meta p {
+            font-size: 0.76rem;
+            color: var(--text-sub);
+            margin-top: 1px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .badge-year {
+            background: rgba(215, 25, 33, 0.2);
+            border: 1px solid rgba(215, 25, 33, 0.4);
+            color: #ff7b82;
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        /* Top Right Live Telemetry & Quick Metrics */
+        .telemetry-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .metric-box {
+            background: var(--card-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            padding: 8px 16px;
+            border-radius: 14px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+            min-width: 130px;
+            transition: all 0.2s ease;
+        }
+
+        .metric-box:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .metric-box .metric-label {
+            font-size: 0.68rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .metric-box .metric-val {
+            font-family: var(--font-mono);
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #fff;
+            margin-top: 3px;
+        }
+
+        .metric-box .metric-val.gold {
+            color: var(--lion-gold);
+            text-shadow: 0 0 12px rgba(255, 184, 0, 0.35);
+        }
+
+        .metric-box .metric-sub {
+            font-size: 0.68rem;
+            color: #7ee787;
+            font-weight: 600;
+            margin-top: 1px;
+        }
+
+        /* Flight Tour Progress Indicator */
+        .tour-banner {
+            top: 86px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(215, 25, 33, 0.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 30px;
+            padding: 8px 22px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 24px rgba(215, 25, 33, 0.6);
+            z-index: 40;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tour-banner.active {
+            display: flex;
+        }
+
+        .tour-banner span {
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .btn-stop-tour {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-stop-tour:hover {
+            background: black;
+        }
+
+        /* Bottom Control Deck */
+        .control-deck {
+            bottom: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card-glass);
+            backdrop-filter: blur(24px);
+            padding: 6px 10px;
+            border-radius: 40px;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        .deck-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 24px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            white-space: nowrap;
+        }
+
+        .deck-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .deck-btn.active {
+            background: linear-gradient(135deg, var(--lion-red-bright) 0%, var(--lion-red) 100%);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(215, 25, 33, 0.45);
+        }
+
+        .deck-btn.gold-btn {
+            border-color: rgba(255, 184, 0, 0.3);
+        }
+
+        .deck-btn.gold-btn:hover, .deck-btn.gold-btn.active {
+            background: linear-gradient(135deg, var(--lion-gold-bright) 0%, var(--lion-gold) 100%);
+            color: #000;
+            font-weight: 700;
+            box-shadow: 0 4px 16px rgba(255, 184, 0, 0.4);
+        }
+
+        .deck-sep {
+            width: 1px;
+            height: 22px;
+            background: rgba(255, 255, 255, 0.12);
+            margin: 0 3px;
+        }
+
+        /* Side Quick Stats & Legend (Left) */
+        .side-legend {
+            left: 20px;
+            bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 250px;
+        }
+
+        .legend-card {
+            background: var(--card-glass);
+            backdrop-filter: blur(18px);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 10px 14px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .legend-title {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-sub);
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.76rem;
+            margin-top: 4px;
+        }
+
+        .legend-color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        /* Interactive Detail Drawer (Right) */
+        .drawer-panel {
+            top: 86px;
+            right: 20px;
+            width: 330px;
+            max-height: calc(100vh - 120px);
+            background: var(--card-glass-elevated);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow-y: auto;
+            transform: translateX(380px);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 30;
+        }
+
+        .drawer-panel.open {
+            transform: translateX(0);
+        }
+
+        .drawer-panel::-webkit-scrollbar {
+            width: 4px;
+        }
+        .drawer-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 12px;
+        }
+
+        .drawer-header h3 {
+            font-size: 1.05rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-close-drawer {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--border-glass);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-sub);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-close-drawer:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        /* Detail Cards inside Drawer */
+        .drawer-hero {
+            background: linear-gradient(135deg, rgba(215, 25, 33, 0.25) 0%, rgba(255, 184, 0, 0.08) 100%);
+            border: 1px solid rgba(215, 25, 33, 0.35);
+            border-radius: 14px;
+            padding: 14px;
+            position: relative;
+        }
+
+        .drawer-hero .m-name {
+            font-size: 0.8rem;
+            color: #ff8c92;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .drawer-hero .m-total {
+            font-family: var(--font-mono);
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 4px 0 2px 0;
+        }
+
+        .drawer-hero .m-note {
+            font-size: 0.78rem;
+            color: var(--lion-gold);
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .progress-bar-wrap {
+            margin-top: 10px;
+        }
+
+        .pbar-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            color: var(--text-sub);
+            margin-bottom: 4px;
+        }
+
+        .pbar-track {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .pbar-fill-dom {
+            height: 100%;
+            background: var(--lion-red-bright);
+        }
+
+        .pbar-fill-int {
+            height: 100%;
+            background: var(--lion-gold);
+        }
+
+        /* Top Routes Section */
+        .route-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-top: 6px;
+            font-size: 0.75rem;
+        }
+
+        .route-code {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .route-count {
+            color: var(--text-sub);
+            font-weight: 600;
+        }
+
+        /* 3D Dynamic Tooltip */
+        #chart-tooltip {
+            position: absolute;
+            display: none;
+            z-index: 100;
+            background: rgba(10, 14, 20, 0.94);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(215, 25, 33, 0.5);
+            border-radius: 14px;
+            padding: 12px 16px;
+            color: #fff;
+            pointer-events: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(215, 25, 33, 0.25);
+            min-width: 210px;
+            transform: translate(-50%, -125%);
+            transition: opacity 0.15s ease, transform 0.08s ease;
+        }
+
+        #chart-tooltip .tt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.72rem;
+            color: #ff7b82;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        #chart-tooltip .tt-val {
+            font-family: var(--font-mono);
+            font-size: 1.45rem;
+            font-weight: 900;
+            color: #fff;
+            margin: 4px 0 2px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        #chart-tooltip .tt-val small {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-sub);
+            font-family: var(--font-sans);
+        }
+
+        #chart-tooltip .tt-split {
+            font-size: 0.72rem;
+            color: var(--text-sub);
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        #chart-tooltip .tt-note {
+            font-size: 0.72rem;
+            color: var(--lion-gold);
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        /* Sound toggle button in bottom right */
+        .sound-toggle {
+            bottom: 24px;
+            right: 20px;
+            background: var(--card-glass);
+            backdrop-filter: blur(18px);
+            border: 1px solid var(--border-glass);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s;
+            color: var(--text-sub);
+        }
+
+        .sound-toggle:hover {
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: scale(1.08);
+        }
+
+        .sound-toggle.muted svg path.sound-wave {
+            display: none;
+        }
+
+        /* Floating Month Selector Pills along top */
+        .month-selector {
+            top: 86px;
+            left: 20px;
+            display: flex;
+            gap: 6px;
+            background: var(--card-glass);
+            backdrop-filter: blur(18px);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+        }
+
+        .month-pill {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            font-size: 0.74rem;
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .month-pill:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .month-pill.active {
+            background: var(--lion-red);
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(215, 25, 33, 0.5);
+        }
+
+        /* Keyboard / gesture hint */
+        .viewport-hint {
+            bottom: 74px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.72rem;
+            color: var(--text-sub);
+            background: rgba(6, 9, 14, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 4px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            pointer-events: none;
+        }
+
+        @media (max-width: 1024px) {
+            .telemetry-bar, .month-selector, .side-legend {
+                display: none;
+            }
+            .drawer-panel {
+                width: 90vw;
+                right: 5vw;
+                top: 80px;
+            }
+            .control-deck {
+                bottom: 12px;
+                padding: 4px 8px;
+            }
+            .deck-btn {
+                padding: 6px 10px;
+                font-size: 0.68rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="webgl-container"></div>
+    <div class="hud-overlay"></div>
+
+    <!-- UI Overlay: Top Navigation Bar -->
+    <header class="ui-layer">
+        <div class="brand-panel interactive">
+            <div class="brand-avatar">🦁</div>
+            <div class="brand-meta">
+                <h1>Lion Air Flight Intelligence <span class="live-dot" title="Sistem Aktif"></span></h1>
+                <p>
+                    <span class="badge-year">2026</span>
+                    <span>3D Area Chart & Runway Telemetry (Jan – Nov 2026)</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Telemetry Stats Cards -->
+        <div class="telemetry-bar interactive">
+            <div class="metric-box">
+                <div class="metric-label">
+                    <span>Total Flights</span>
+                    <span>🛫</span>
+                </div>
+                <div class="metric-val" id="stat-total">198.810</div>
+                <div class="metric-sub">↑ 8.4% vs 2025</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">
+                    <span>Peak Month</span>
+                    <span>🔥</span>
+                </div>
+                <div class="metric-val gold" id="stat-peak">22.480</div>
+                <div class="metric-sub" style="color:var(--lion-gold);">April (Lebaran)</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">
+                    <span>Avg / Month</span>
+                    <span>📊</span>
+                </div>
+                <div class="metric-val" id="stat-avg">18.073</div>
+                <div class="metric-sub" style="color:#79c0ff;">~602 per hari</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">
+                    <span>Armada Aktif</span>
+                    <span>✈️</span>
+                </div>
+                <div class="metric-val">103 <small style="font-size:0.75rem; color:var(--text-sub);">Jets</small></div>
+                <div class="metric-sub" style="color:#d2a8ff;">B737 & A330neo</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Month Quick Selector -->
+    <div class="ui-layer month-selector interactive" id="month-pills-bar">
+        <!-- Injected via JS -->
+    </div>
+
+    <!-- Tour Progress Banner -->
+    <div class="ui-layer tour-banner interactive" id="tour-banner">
+        <span id="tour-status-text">✈️ Melakukan Tur Penerbangan: <strong>Januari</strong>...</span>
+        <button class="btn-stop-tour" id="btn-stop-tour">Hentikan Tur ✕</button>
+    </div>
+
+    <!-- Viewport Hint -->
+    <div class="ui-layer viewport-hint">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 8v8m-4-4h8"></path>
+        </svg>
+        <span>Klik & geser untuk rotasi 3D • Scroll untuk zoom • Klik titik data untuk fokus pesawat</span>
+    </div>
+
+    <!-- Side Legend & Visual Layers (Bottom Left) -->
+    <div class="ui-layer side-legend interactive">
+        <div class="legend-card">
+            <div class="legend-title">Lapisan Area Chart 3D</div>
+            <div class="legend-item">
+                <span><span class="legend-color-dot" style="background:#D71921; box-shadow:0 0 6px #D71921;"></span>Domestik (90.8%)</span>
+                <strong style="font-family:var(--font-mono); color:#fff;">180.500</strong>
+            </div>
+            <div class="legend-item">
+                <span><span class="legend-color-dot" style="background:#FFB800; box-shadow:0 0 6px #FFB800;"></span>Internasional (9.2%)</span>
+                <strong style="font-family:var(--font-mono); color:var(--lion-gold);">18.310</strong>
+            </div>
+        </div>
+
+        <div class="legend-card" style="padding:8px 12px;">
+            <div class="legend-item" style="margin:0;">
+                <span style="color:var(--text-sub); font-size:0.72rem;">Pesawat 3D:</span>
+                <span style="color:#7ee787; font-weight:700; font-size:0.72rem;">Boeing 737-900ER</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Central Control Deck (Bottom Center) -->
+    <div class="ui-layer control-deck interactive">
+        <button class="deck-btn active" id="btn-preset-3d" title="Sudut Pandang Isometrik 3D">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            Sudut 3D
+        </button>
+        <button class="deck-btn" id="btn-preset-front" title="Tampak Depan (2D Classic View)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            </svg>
+            Tampak Depan
+        </button>
+        <button class="deck-btn" id="btn-preset-top" title="Tampak Atas Runway">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            Tampak Atas
+        </button>
+
+        <div class="deck-sep"></div>
+
+        <button class="deck-btn gold-btn" id="btn-flight-tour" title="Mode Simulasi Penerbangan Menelusuri Kurva">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+            ✈️ Tur Terbang
+        </button>
+
+        <button class="deck-btn" id="btn-autorotate" title="Putar Kamera Otomatis">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Auto-Putar
+        </button>
+
+        <button class="deck-btn" id="btn-toggle-badges" title="Tampilkan/Sembunyikan Label Angka">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            </svg>
+            Label 3D
+        </button>
+
+        <div class="deck-sep"></div>
+
+        <button class="deck-btn" id="btn-toggle-drawer" title="Buka Detail Analisis">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            Detail Analisis
+        </button>
+    </div>
+
+    <!-- Sound Effects Toggle (Bottom Right) -->
+    <div class="ui-layer sound-toggle interactive muted" id="btn-sound" title="Toggle Efek Suara Kokpit">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path class="sound-wave" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <line class="mute-slash" x1="23" y1="1" x2="1" y2="23" stroke="#FF2E38" stroke-width="2"></line>
+        </svg>
+    </div>
+
+    <!-- Side Analysis Drawer (Slide-in) -->
+    <div class="ui-layer drawer-panel interactive" id="drawer-panel">
+        <div class="drawer-header">
+            <h3><span>✈️</span> Detail Analisis Rute</h3>
+            <button class="btn-close-drawer" id="btn-close-drawer">✕</button>
+        </div>
+
+        <!-- Selected Month Dynamic Hero Card -->
+        <div class="drawer-hero" id="drawer-hero-card">
+            <div class="m-name" id="dh-month">APRIL 2026</div>
+            <div class="m-total" id="dh-total">22.480</div>
+            <div class="m-note" id="dh-note">🔥 Puncak Arus Mudik & Balik Idul Fitri 1447 H</div>
+            
+            <div class="progress-bar-wrap">
+                <div class="pbar-labels">
+                    <span>Domestik: <b id="dh-dom">20.450</b></span>
+                    <span>Internasional: <b id="dh-int">2.030</b></span>
+                </div>
+                <div class="pbar-track">
+                    <div class="pbar-fill-dom" id="dh-pbar-dom" style="width: 90.9%;"></div>
+                    <div class="pbar-fill-int" id="dh-pbar-int" style="width: 9.1%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 5 Busiest Routes during this period -->
+        <div>
+            <h4 style="font-size:0.78rem; text-transform:uppercase; color:var(--text-sub); letter-spacing:0.06em; margin-bottom:8px;">5 Rute Terpadat (Bulan Terpilih)</h4>
+            <div id="top-routes-list">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Fleet Breakdown -->
+        <div>
+            <h4 style="font-size:0.78rem; text-transform:uppercase; color:var(--text-sub); letter-spacing:0.06em; margin-bottom:8px;">Alokasi Armada Lion Air</h4>
+            <div class="route-item">
+                <span><b>Boeing 737-900ER</b> (215 Kursi)</span>
+                <span class="route-code" style="color:var(--lion-gold);">64 Pesawat</span>
+            </div>
+            <div class="route-item">
+                <span><b>Boeing 737-800</b> (189 Kursi)</span>
+                <span class="route-code">31 Pesawat</span>
+            </div>
+            <div class="route-item">
+                <span><b>Airbus A330-900neo</b> (436 Kursi)</span>
+                <span class="route-code" style="color:#7ee787;">8 Pesawat</span>
+            </div>
+        </div>
+
+        <!-- Monthly Data Summary Table -->
+        <div>
+            <h4 style="font-size:0.78rem; text-transform:uppercase; color:var(--text-sub); letter-spacing:0.06em; margin-bottom:8px;">Rangkuman 11 Bulan 2026</h4>
+            <div style="max-height: 180px; overflow-y:auto; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.74rem;">
+                    <thead>
+                        <tr style="background:rgba(255,255,255,0.05); color:var(--text-sub); text-align:left;">
+                            <th style="padding:6px 8px;">Bulan</th>
+                            <th style="padding:6px 8px;">Dom</th>
+                            <th style="padding:6px 8px;">Int</th>
+                            <th style="padding:6px 8px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D Raycaster Tooltip -->
+    <div id="chart-tooltip">
+        <div class="tt-header">
+            <span id="tt-month">APRIL 2026</span>
+            <span style="color:var(--lion-gold); font-size:0.68rem;">✈️ LION AIR</span>
+        </div>
+        <div class="tt-val">
+            <span id="tt-value">22.480</span>
+            <small>penerbangan</small>
+        </div>
+        <div class="tt-split">
+            <span>🇮🇩 Dom: <strong id="tt-dom">20.450</strong></span>
+            <span>🌏 Int: <strong id="tt-int">2.030</strong></span>
+        </div>
+        <div class="tt-note" id="tt-note">✨ Puncak Mudik Lebaran Idul Fitri</div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // ==========================================
+        // 1. DATA PENERBANGAN LION AIR (Jan - Nov 2026)
+        // ==========================================
+        const flightData = [
+            {
+                month: "Januari", short: "Jan",
+                domestic: 16850, intl: 1870, flights: 18720,
+                note: "Liburan Tahun Baru & Arus Balik Wisatawan",
+                routes: [["CGK ⇄ DPS", "2.120"], ["CGK ⇄ SUB", "1.890"], ["CGK ⇄ KNO", "1.410"], ["SUB ⇄ DPS", "1.180"], ["CGK ⇄ UPG", "1.320"]]
+            },
+            {
+                month: "Februari", short: "Feb",
+                domestic: 12980, intl: 1370, flights: 14350,
+                note: "Low season reguler pasca libur panjang",
+                routes: [["CGK ⇄ DPS", "1.640"], ["CGK ⇄ SUB", "1.520"], ["CGK ⇄ KNO", "1.180"], ["CGK ⇄ UPG", "1.100"], ["SUB ⇄ DPS", "920"]]
+            },
+            {
+                month: "Maret", short: "Mar",
+                domestic: 15220, intl: 1620, flights: 16840,
+                note: "Awal Bulan Suci Ramadhan 1447 H & Umrah Charter",
+                routes: [["CGK ⇄ JED", "580"], ["CGK ⇄ DPS", "1.780"], ["CGK ⇄ SUB", "1.680"], ["CGK ⇄ KNO", "1.290"], ["CGK ⇄ UPG", "1.250"]]
+            },
+            {
+                month: "April", short: "Apr",
+                domestic: 20450, intl: 2030, flights: 22480, peak: true,
+                note: "🔥 Puncak Mudik & Libur Lebaran Idul Fitri 1447 H (All-time Peak)",
+                routes: [["CGK ⇄ SUB", "2.480"], ["CGK ⇄ KNO", "2.150"], ["CGK ⇄ DPS", "2.100"], ["CGK ⇄ UPG", "1.850"], ["CGK ⇄ PDG", "1.420"]]
+            },
+            {
+                month: "Mei", short: "Mei",
+                domestic: 16200, intl: 1700, flights: 17900,
+                note: "Arus balik Lebaran & libur akhir pekan panjang",
+                routes: [["SUB ⇄ CGK", "1.920"], ["KNO ⇄ CGK", "1.740"], ["CGK ⇄ DPS", "1.810"], ["UPG ⇄ CGK", "1.450"], ["CGK ⇄ JOG", "1.120"]]
+            },
+            {
+                month: "Juni", short: "Jun",
+                domestic: 18250, intl: 1900, flights: 20150,
+                note: "Awal Liburan Sekolah Semester Genap",
+                routes: [["CGK ⇄ DPS", "2.350"], ["SUB ⇄ DPS", "1.450"], ["CGK ⇄ SUB", "1.820"], ["CGK ⇄ KNO", "1.380"], ["CGK ⇄ LOP", "1.080"]]
+            },
+            {
+                month: "Juli", short: "Jul",
+                domestic: 19300, intl: 2040, flights: 21340,
+                note: "Puncak Liburan Sekolah Pertengahan Tahun",
+                routes: [["CGK ⇄ DPS", "2.510"], ["SUB ⇄ DPS", "1.520"], ["CGK ⇄ JOG", "1.340"], ["CGK ⇄ SUB", "1.850"], ["CGK ⇄ KNO", "1.420"]]
+            },
+            {
+                month: "Agustus", short: "Agu",
+                domestic: 16500, intl: 1720, flights: 18220,
+                note: "Penerbangan HUT Kemerdekaan RI ke-81 & Bisnis",
+                routes: [["CGK ⇄ IKN", "1.380"], ["CGK ⇄ SUB", "1.790"], ["CGK ⇄ DPS", "1.890"], ["CGK ⇄ KNO", "1.310"], ["CGK ⇄ UPG", "1.280"]]
+            },
+            {
+                month: "September", short: "Sep",
+                domestic: 13950, intl: 1460, flights: 15410,
+                note: "Stabilitas rute korporat & pariwisata",
+                routes: [["CGK ⇄ SUB", "1.740"], ["CGK ⇄ DPS", "1.710"], ["CGK ⇄ KNO", "1.250"], ["CGK ⇄ UPG", "1.210"], ["CGK ⇄ BPN", "980"]]
+            },
+            {
+                month: "Oktober", short: "Okt",
+                domestic: 15080, intl: 1550, flights: 16630,
+                note: "Musim konferensi kerja & festival daerah",
+                routes: [["CGK ⇄ DPS", "1.850"], ["CGK ⇄ SUB", "1.780"], ["CGK ⇄ KNO", "1.320"], ["CGK ⇄ UPG", "1.260"], ["SUB ⇄ DPS", "1.040"]]
+            },
+            {
+                month: "November", short: "Nov",
+                domestic: 15200, intl: 1560, flights: 16760,
+                note: "Persiapan angkutan libur akhir tahun & pergerakan logistik",
+                routes: [["CGK ⇄ DPS", "1.920"], ["CGK ⇄ SUB", "1.810"], ["CGK ⇄ KNO", "1.340"], ["CGK ⇄ UPG", "1.290"], ["CGK ⇄ SRG", "1.020"]]
+            }
+        ];
+
+        // ==========================================
+        // 2. SYNTHESIZED COCKPIT SOUND (Web Audio API)
+        // ==========================================
+        let audioCtx = null;
+        let soundEnabled = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled || !audioCtx) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'beep') {
+                // Subtle high-tech blip
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+                gain.gain.setValueAtTime(0.06, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'chime') {
+                // Cabin two-tone chime
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(587.33, now); // D5
+                osc.frequency.setValueAtTime(880, now + 0.15); // A5
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } else if (type === 'whoosh') {
+                // Low altitude whoosh
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(240, now);
+                osc.frequency.exponentialRampToValueAtTime(440, now + 0.3);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+        }
+
+        const btnSound = document.getElementById('btn-sound');
+        btnSound.addEventListener('click', () => {
+            initAudio();
+            soundEnabled = !soundEnabled;
+            btnSound.classList.toggle('muted', !soundEnabled);
+            const slash = btnSound.querySelector('.mute-slash');
+            if (slash) slash.style.display = soundEnabled ? 'none' : 'block';
+            if (soundEnabled) playSound('chime');
+        });
+
+        // ==========================================
+        // 3. UI POPULATION & EVENT LISTENERS
+        // ==========================================
+        const monthPillsBar = document.getElementById('month-pills-bar');
+        const summaryTbody = document.getElementById('summary-tbody');
+
+        flightData.forEach((d, i) => {
+            // Month Pills
+            const pill = document.createElement('button');
+            pill.className = `month-pill ${i === 3 ? 'active' : ''}`;
+            pill.textContent = d.short;
+            pill.dataset.index = i;
+            pill.addEventListener('click', () => {
+                selectMonth(i, true);
+                playSound('beep');
+            });
+            monthPillsBar.appendChild(pill);
+
+            // Summary Table
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+            if (d.peak) tr.style.color = 'var(--lion-gold)';
+            tr.innerHTML = `
+                <td style="padding:6px 8px; font-weight:600;">${d.month}</td>
+                <td style="padding:6px 8px; font-family:var(--font-mono);">${d.domestic.toLocaleString('id-ID')}</td>
+                <td style="padding:6px 8px; font-family:var(--font-mono);">${d.intl.toLocaleString('id-ID')}</td>
+                <td style="padding:6px 8px; font-family:var(--font-mono); font-weight:700;">${d.flights.toLocaleString('id-ID')}</td>
+            `;
+            tr.addEventListener('click', () => {
+                selectMonth(i, true);
+                playSound('beep');
+            });
+            summaryTbody.appendChild(tr);
+        });
+
+        function updateDrawerCard(data) {
+            document.getElementById('dh-month').textContent = `${data.month.toUpperCase()} 2026`;
+            document.getElementById('dh-total').textContent = data.flights.toLocaleString('id-ID');
+            document.getElementById('dh-note').textContent = data.peak ? `🔥 ${data.note}` : `✈️ ${data.note}`;
+            document.getElementById('dh-dom').textContent = data.domestic.toLocaleString('id-ID');
+            document.getElementById('dh-int').textContent = data.intl.toLocaleString('id-ID');
+
+            const domPct = ((data.domestic / data.flights) * 100).toFixed(1);
+            const intPct = (100 - domPct).toFixed(1);
+            document.getElementById('dh-pbar-dom').style.width = `${domPct}%`;
+            document.getElementById('dh-pbar-int').style.width = `${intPct}%`;
+
+            const routesContainer = document.getElementById('top-routes-list');
+            routesContainer.innerHTML = '';
+            data.routes.forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'route-item';
+                item.innerHTML = `
+                    <span class="route-code">🛫 ${r[0]}</span>
+                    <span class="route-count">${r[1]} flights/bln</span>
+                `;
+                routesContainer.appendChild(item);
+            });
+        }
+
+        // Drawer Controls
+        const drawerPanel = document.getElementById('drawer-panel');
+        const btnToggleDrawer = document.getElementById('btn-toggle-drawer');
+        const btnCloseDrawer = document.getElementById('btn-close-drawer');
+
+        btnToggleDrawer.addEventListener('click', () => {
+            drawerPanel.classList.toggle('open');
+            btnToggleDrawer.classList.toggle('active', drawerPanel.classList.contains('open'));
+            playSound('beep');
+        });
+
+        btnCloseDrawer.addEventListener('click', () => {
+            drawerPanel.classList.remove('open');
+            btnToggleDrawer.classList.remove('active');
+            playSound('beep');
+        });
+
+        // ==========================================
+        // 4. THREE.JS INITIALIZATION
+        // ==========================================
+        const container = document.getElementById('webgl-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x06090e);
+        scene.fog = new THREE.FogExp2(0x06090e, 0.016);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.maxPolarAngle = Math.PI / 2 + 0.01;
+        controls.minDistance = 12;
+        controls.maxDistance = 85;
+
+        const defaultCamPos = new THREE.Vector3(18, 16, 28);
+        const defaultLookAt = new THREE.Vector3(0, 5, 0);
+        camera.position.copy(defaultCamPos);
+        controls.target.copy(defaultLookAt);
+
+        // ==========================================
+        // 5. LIGHTING SYSTEM (Hangar & Stadium Floods)
+        // ==========================================
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambientLight);
+
+        const mainSun = new THREE.DirectionalLight(0xfff5ea, 1.4);
+        mainSun.position.set(25, 35, 20);
+        mainSun.castShadow = true;
+        mainSun.shadow.mapSize.width = 2048;
+        mainSun.shadow.mapSize.height = 2048;
+        mainSun.shadow.camera.near = 0.5;
+        mainSun.shadow.camera.far = 100;
+        mainSun.shadow.camera.left = -22;
+        mainSun.shadow.camera.right = 22;
+        mainSun.shadow.camera.top = 22;
+        mainSun.shadow.camera.bottom = -5;
+        mainSun.shadow.bias = -0.0001;
+        scene.add(mainSun);
+
+        // Red atmospheric glow on left
+        const redSpot = new THREE.PointLight(0xd71921, 3.5, 45);
+        redSpot.position.set(-10, 14, 8);
+        scene.add(redSpot);
+
+        // Gold rim glow on right
+        const goldSpot = new THREE.PointLight(0xffb800, 2.5, 40);
+        goldSpot.position.set(10, 16, 6);
+        scene.add(goldSpot);
+
+        // Subtle blue rim from back
+        const blueRim = new THREE.DirectionalLight(0x0a84ff, 0.8);
+        blueRim.position.set(-10, 15, -20);
+        scene.add(blueRim);
+
+        // ==========================================
+        // 6. RUNWAY GROUND & AIRPORT LIGHTS
+        // ==========================================
+        const runwayGroup = new THREE.Group();
+        scene.add(runwayGroup);
+
+        // Asphalt runway surface
+        const runwayGeo = new THREE.PlaneGeometry(36, 14);
+        const runwayMat = new THREE.MeshStandardMaterial({
+            color: 0x0c1017,
+            roughness: 0.65,
+            metalness: 0.1
+        });
+        const runwayMesh = new THREE.Mesh(runwayGeo, runwayMat);
+        runwayMesh.rotation.x = -Math.PI / 2;
+        runwayMesh.position.set(0, -0.01, 1);
+        runwayMesh.receiveShadow = true;
+        runwayGroup.add(runwayMesh);
+
+        // Ground Grid Helper
+        const gridHelper = new THREE.GridHelper(60, 30, 0xd71921, 0x181f2b);
+        gridHelper.position.y = -0.02;
+        scene.add(gridHelper);
+
+        // Runway Centerline Dashes
+        const dashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+        for (let x = -14; x <= 14; x += 3.5) {
+            const dashGeo = new THREE.PlaneGeometry(1.8, 0.25);
+            const dash = new THREE.Mesh(dashGeo, dashMat);
+            dash.rotation.x = -Math.PI / 2;
+            dash.position.set(x, 0.01, 7.2);
+            runwayGroup.add(dash);
+        }
+
+        // Glowing Runway Edge Lights (Pulsing Point Lights)
+        const runwayLightsGroup = new THREE.Group();
+        scene.add(runwayLightsGroup);
+        const lightSphereGeo = new THREE.SphereGeometry(0.08, 12, 12);
+        const whiteLightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const greenLightMat = new THREE.MeshBasicMaterial({ color: 0x00ff66 });
+        const amberLightMat = new THREE.MeshBasicMaterial({ color: 0xffb800 });
+
+        for (let x = -15; x <= 15; x += 3) {
+            // Front edge
+            const lightF = new THREE.Mesh(lightSphereGeo, amberLightMat);
+            lightF.position.set(x, 0.08, 7.8);
+            runwayLightsGroup.add(lightF);
+
+            // Back edge
+            const lightB = new THREE.Mesh(lightSphereGeo, whiteLightMat);
+            lightB.position.set(x, 0.08, -5.8);
+            runwayLightsGroup.add(lightB);
+        }
+
+        // Radar Scanning Ring on Ground
+        const radarRingGeo = new THREE.RingGeometry(8, 8.15, 64);
+        const radarRingMat = new THREE.MeshBasicMaterial({ color: 0xd71921, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+        const radarRing = new THREE.Mesh(radarRingGeo, radarRingMat);
+        radarRing.rotation.x = -Math.PI / 2;
+        radarRing.position.y = 0.01;
+        scene.add(radarRing);
+
+        // Floating ambient dust particles (Starfield/Hangar dust)
+        const dustGeo = new THREE.BufferGeometry();
+        const dustCount = 450;
+        const dustPos = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount * 3; i += 3) {
+            dustPos[i] = (Math.random() - 0.5) * 70;
+            dustPos[i + 1] = Math.random() * 25;
+            dustPos[i + 2] = (Math.random() - 0.5) * 50;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        const dustMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.35 });
+        const dustParticles = new THREE.Points(dustGeo, dustMat);
+        scene.add(dustParticles);
+
+        // ==========================================
+        // 7. 3D AREA CHART GEOMETRY & MULTI-SERIES
+        // ==========================================
+        const chartGroup = new THREE.Group();
+        scene.add(chartGroup);
+
+        const chartWidth = 26; // X span from -13 to +13
+        const maxHeight = 10;  // Y span for max flight (~25k)
+        const maxFlightValue = 25000;
+        const numPoints = flightData.length;
+        const xStep = chartWidth / (numPoints - 1);
+        const startX = -chartWidth / 2;
+
+        const dataPoints = flightData.map((d, i) => {
+            const x = startX + i * xStep;
+            const y = (d.flights / maxFlightValue) * maxHeight;
+            const yDom = (d.domestic / maxFlightValue) * maxHeight;
+            return { x, y, yDom, data: d, index: i };
+        });
+
+        // Procedural Vertical Gradient Texture for Area Mesh
+        function createGradientTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 0, 256);
+            grad.addColorStop(0, '#FF2E38'); // Top bright
+            grad.addColorStop(0.35, '#D71921'); // Mid Lion red
+            grad.addColorStop(0.85, '#6a080d'); // Deep wine
+            grad.addColorStop(1, 'rgba(30, 4, 6, 0.3)'); // Bottom fade
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 16, 256);
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        // Extruded Main Area Mesh (Total Flights)
+        const areaShape = new THREE.Shape();
+        areaShape.moveTo(dataPoints[0].x, 0);
+        dataPoints.forEach(p => areaShape.lineTo(p.x, p.y));
+        areaShape.lineTo(dataPoints[dataPoints.length - 1].x, 0);
+        areaShape.closePath();
+
+        const extrudeSettings = {
+            steps: 1,
+            depth: 3.2,
+            bevelEnabled: true,
+            bevelThickness: 0.18,
+            bevelSize: 0.15,
+            bevelSegments: 4
+        };
+
+        const areaGeo = new THREE.ExtrudeGeometry(areaShape, extrudeSettings);
+        areaGeo.translate(0, 0, -1.6); // Center Z
+
+        const areaTexture = createGradientTexture();
+        const areaMaterial = new THREE.MeshPhysicalMaterial({
+            map: areaTexture,
+            color: 0xffffff,
+            emissive: 0x440508,
+            emissiveIntensity: 0.3,
+            roughness: 0.2,
+            metalness: 0.15,
+            clearcoat: 0.8,
+            clearcoatRoughness: 0.15,
+            transmission: 0.25,
+            opacity: 0.92,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        const areaMesh = new THREE.Mesh(areaGeo, areaMaterial);
+        areaMesh.castShadow = true;
+        areaMesh.receiveShadow = true;
+        chartGroup.add(areaMesh);
+
+        // Glowing Contour Ridge Tube along the crest
+        const crestPoints = dataPoints.map(p => new THREE.Vector3(p.x, p.y, 1.62));
+        const crestCurve = new THREE.CatmullRomCurve3(crestPoints, false, 'centripetal', 0.1);
+        const tubeGeo = new THREE.TubeGeometry(crestCurve, 120, 0.12, 12, false);
+        const tubeMat = new THREE.MeshStandardMaterial({
+            color: 0xffb800,
+            emissive: 0xffa000,
+            emissiveIntensity: 0.9,
+            roughness: 0.15,
+            metalness: 0.6
+        });
+        const crestTube = new THREE.Mesh(tubeGeo, tubeMat);
+        chartGroup.add(crestTube);
+
+        // Back crest tube for 3D depth
+        const backCrestPoints = dataPoints.map(p => new THREE.Vector3(p.x, p.y, -1.62));
+        const backCrestCurve = new THREE.CatmullRomCurve3(backCrestPoints, false, 'centripetal', 0.1);
+        const backCrestTube = new THREE.Mesh(new THREE.TubeGeometry(backCrestCurve, 120, 0.12, 12, false), tubeMat);
+        chartGroup.add(backCrestTube);
+
+        // 3D Data Spheres & Floating Value Badges
+        const interactableSpheres = [];
+        const sphereGeo = new THREE.SphereGeometry(0.36, 32, 32);
+        const badgeGroup = new THREE.Group();
+        chartGroup.add(badgeGroup);
+
+        dataPoints.forEach(p => {
+            // Front beacon sphere
+            const sphereMat = new THREE.MeshStandardMaterial({
+                color: p.data.peak ? 0xffdd00 : 0xffffff,
+                emissive: p.data.peak ? 0xffb800 : 0xd71921,
+                emissiveIntensity: p.data.peak ? 1.1 : 0.6,
+                roughness: 0.15,
+                metalness: 0.85
+            });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            sphere.position.set(p.x, p.y, 1.65);
+            sphere.userData = { data: p.data, point: p, index: p.index };
+            chartGroup.add(sphere);
+            interactableSpheres.push(sphere);
+
+            // Vertical indicator pillar (Light Beam)
+            const beamGeo = new THREE.CylinderGeometry(0.035, 0.035, p.y, 8);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.set(p.x, p.y / 2, 1.65);
+            chartGroup.add(beam);
+
+            // Floating value label badge
+            const badgeSprite = createTextSprite(
+                p.data.flights.toLocaleString('id-ID'),
+                { fontSize: 32, fontColor: p.data.peak ? '#FFB800' : '#FFFFFF', bgColor: 'rgba(15,20,28,0.88)', isPill: true }
+            );
+            badgeSprite.position.set(p.x, p.y + 0.95, 1.8);
+            badgeSprite.scale.set(2.4, 1.2, 1);
+            badgeGroup.add(badgeSprite);
+        });
+
+        // Text Sprite Helper
+        function createTextSprite(text, options = {}) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            const fontSize = options.fontSize || 36;
+            const fontColor = options.fontColor || '#FFFFFF';
+            const bgColor = options.bgColor || null;
+
+            if (bgColor) {
+                ctx.fillStyle = bgColor;
+                if (options.isPill) {
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(14, 26, 228, 76, 38);
+                    } else {
+                        ctx.rect(14, 26, 228, 76);
+                    }
+                    ctx.fill();
+                    ctx.strokeStyle = options.borderColor || 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } else {
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            ctx.font = `800 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillStyle = fontColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            return sprite;
+        }
+
+        // X-Axis Month Billboard Sprites
+        dataPoints.forEach(p => {
+            const monthSprite = createTextSprite(p.data.short, { fontSize: 38, fontColor: '#8b949e' });
+            monthSprite.position.set(p.x, -0.75, 2.0);
+            monthSprite.scale.set(1.9, 0.95, 1);
+            scene.add(monthSprite);
+        });
+
+        // Y-Axis Ticks & Grid Lines
+        const yAxisValues = [0, 5000, 10000, 15000, 20000, 25000];
+        yAxisValues.forEach(val => {
+            const yPos = (val / maxFlightValue) * maxHeight;
+            const labelStr = val === 0 ? "0" : (val / 1000) + "k";
+            const ySprite = createTextSprite(labelStr, { fontSize: 32, fontColor: '#6e7681' });
+            ySprite.position.set(startX - 1.3, yPos, 1.8);
+            ySprite.scale.set(1.6, 0.8, 1);
+            scene.add(ySprite);
+
+            // Horizontal Grid Guide
+            const linePoints = [
+                new THREE.Vector3(startX, yPos, 1.62),
+                new THREE.Vector3(startX + chartWidth, yPos, 1.62)
+            ];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x222a36, transparent: true, opacity: 0.45 });
+            const line = new THREE.Line(lineGeo, lineMat);
+            scene.add(line);
+        });
+
+        // ==========================================
+        // 8. PROCEDURAL 3D AIRPLANE MODEL (Boeing 737 Lion Air)
+        // ==========================================
+        function createBoeing737() {
+            const airplane = new THREE.Group();
+
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0xf5f7fb,
+                roughness: 0.2,
+                metalness: 0.15
+            });
+            const redMat = new THREE.MeshStandardMaterial({
+                color: 0xd71921,
+                roughness: 0.25,
+                metalness: 0.2
+            });
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: 0x091422,
+                roughness: 0.1,
+                metalness: 0.95
+            });
+            const engineMat = new THREE.MeshStandardMaterial({
+                color: 0x6e7681,
+                roughness: 0.35,
+                metalness: 0.7
+            });
+
+            // Cylindrical Fuselage
+            const bodyGeo = new THREE.CylinderGeometry(0.38, 0.35, 4.4, 20);
+            bodyGeo.rotateZ(Math.PI / 2);
+            const fuselage = new THREE.Mesh(bodyGeo, bodyMat);
+            fuselage.castShadow = true;
+            airplane.add(fuselage);
+
+            // Aerodynamic Nose Cone
+            const noseGeo = new THREE.ConeGeometry(0.38, 1.1, 20);
+            noseGeo.rotateZ(-Math.PI / 2);
+            const nose = new THREE.Mesh(noseGeo, bodyMat);
+            nose.position.x = 2.75;
+            nose.castShadow = true;
+            airplane.add(nose);
+
+            // Cockpit Windshield
+            const cockpitGeo = new THREE.BoxGeometry(0.4, 0.18, 0.42);
+            const cockpit = new THREE.Mesh(cockpitGeo, glassMat);
+            cockpit.position.set(2.35, 0.2, 0);
+            airplane.add(cockpit);
+
+            // Tapered Tail Section
+            const tailGeo = new THREE.ConeGeometry(0.35, 1.4, 20);
+            tailGeo.rotateZ(Math.PI / 2);
+            const tail = new THREE.Mesh(tailGeo, bodyMat);
+            tail.position.x = -2.9;
+            airplane.add(tail);
+
+            // Vertical Stabilizer / Tail Fin (Lion Air Red with Swept Angle)
+            const finShape = new THREE.Shape();
+            finShape.moveTo(0, 0);
+            finShape.lineTo(-1.0, 1.45);
+            finShape.lineTo(-0.45, 1.45);
+            finShape.lineTo(0.65, 0);
+            finShape.closePath();
+            const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.08, bevelEnabled: false });
+            finGeo.translate(0, 0, -0.04);
+            const fin = new THREE.Mesh(finGeo, redMat);
+            fin.position.set(-2.4, 0.3, 0);
+            fin.castShadow = true;
+            airplane.add(fin);
+
+            // Horizontal Tail Stabilizers
+            const stabGeo = new THREE.BoxGeometry(0.85, 0.05, 2.2);
+            const stab = new THREE.Mesh(stabGeo, bodyMat);
+            stab.position.set(-2.7, 0.18, 0);
+            airplane.add(stab);
+
+            // Swept Wings (Main Aerofoil)
+            const wingsGeo = new THREE.BoxGeometry(1.4, 0.08, 5.8);
+            const wings = new THREE.Mesh(wingsGeo, bodyMat);
+            wings.position.set(0.3, -0.06, 0);
+            wings.castShadow = true;
+            airplane.add(wings);
+
+            // Lion Red Winglets on Wingtips
+            const wingletGeo = new THREE.BoxGeometry(0.35, 0.45, 0.05);
+            const wingletL = new THREE.Mesh(wingletGeo, redMat);
+            wingletL.position.set(0.2, 0.18, 2.9);
+            const wingletR = new THREE.Mesh(wingletGeo, redMat);
+            wingletR.position.set(0.2, 0.18, -2.9);
+            airplane.add(wingletL, wingletR);
+
+            // Dual CFM Turbofan Jet Engines
+            const engineGeo = new THREE.CylinderGeometry(0.24, 0.22, 1.1, 16);
+            engineGeo.rotateZ(Math.PI / 2);
+            const engineL = new THREE.Mesh(engineGeo, engineMat);
+            engineL.position.set(0.35, -0.36, 1.35);
+            engineL.castShadow = true;
+            const engineR = new THREE.Mesh(engineGeo, engineMat);
+            engineR.position.set(0.35, -0.36, -1.35);
+            engineR.castShadow = true;
+            airplane.add(engineL, engineR);
+
+            // Engine Intake Rings (Lion Red)
+            const intakeGeo = new THREE.TorusGeometry(0.24, 0.035, 8, 20);
+            intakeGeo.rotateY(Math.PI / 2);
+            const intakeL = new THREE.Mesh(intakeGeo, redMat);
+            intakeL.position.set(0.9, -0.36, 1.35);
+            const intakeR = new THREE.Mesh(intakeGeo, redMat);
+            intakeR.position.set(0.9, -0.36, -1.35);
+            airplane.add(intakeL, intakeR);
+
+            // Glowing Navigation Lights (Port Red, Starboard Green, Tail White)
+            const navLightGeo = new THREE.SphereGeometry(0.06, 8, 8);
+            const navRed = new THREE.Mesh(navLightGeo, new THREE.MeshBasicMaterial({ color: 0xff0033 }));
+            navRed.position.set(0.2, 0.0, 2.95);
+            const navGreen = new THREE.Mesh(navLightGeo, new THREE.MeshBasicMaterial({ color: 0x00ff66 }));
+            navGreen.position.set(0.2, 0.0, -2.95);
+            airplane.add(navRed, navGreen);
+
+            airplane.scale.set(0.72, 0.72, 0.72);
+            return airplane;
+        }
+
+        const lionJet = createBoeing737();
+        scene.add(lionJet);
+
+        // Position plane initially at April (Peak)
+        const initialPoint = dataPoints[3]; // April
+        lionJet.position.set(initialPoint.x, initialPoint.y + 1.8, 1.65);
+        lionJet.rotation.set(0, 0, 0.05);
+
+        // Contrail Ribbon behind plane
+        const trailPoints = [];
+        const maxTrail = 24;
+        for (let i = 0; i < maxTrail; i++) {
+            trailPoints.push(new THREE.Vector3().copy(lionJet.position));
+        }
+        const trailGeo = new THREE.BufferGeometry().setFromPoints(trailPoints);
+        const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+        const trailLine = new THREE.Line(trailGeo, trailMat);
+        scene.add(trailLine);
+
+        // ==========================================
+        // 9. ANIMATIONS & MONTH SELECTION LOGIC
+        // ==========================================
+        let currentSelectedIdx = 3; // April by default
+        updateDrawerCard(flightData[3]);
+
+        function selectMonth(idx, moveCamera = false) {
+            currentSelectedIdx = idx;
+            const targetP = dataPoints[idx];
+            const data = targetP.data;
+
+            // Update UI buttons
+            const pills = document.querySelectorAll('.month-pill');
+            pills.forEach((p, i) => p.classList.toggle('active', i === idx));
+
+            updateDrawerCard(data);
+
+            // Glide Airplane to new target position
+            new TWEEN.Tween(lionJet.position)
+                .to({ x: targetP.x, y: targetP.y + 1.8, z: 1.65 }, 800)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+            // Bank airplane smoothly
+            new TWEEN.Tween(lionJet.rotation)
+                .to({ x: 0, y: (targetP.x > lionJet.position.x ? 0.2 : -0.2), z: 0.1 }, 400)
+                .chain(
+                    new TWEEN.Tween(lionJet.rotation)
+                        .to({ x: 0, y: 0, z: 0 }, 400)
+                )
+                .start();
+
+            // Highlight sphere
+            interactableSpheres.forEach((s, i) => {
+                new TWEEN.Tween(s.scale)
+                    .to(i === idx ? { x: 1.5, y: 1.5, z: 1.5 } : { x: 1, y: 1, z: 1 }, 200)
+                    .start();
+            });
+
+            if (moveCamera && !isTourActive) {
+                new TWEEN.Tween(controls.target)
+                    .to({ x: targetP.x, y: targetP.y * 0.6 + 2, z: 0 }, 800)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+            }
+        }
+
+        // Animated chart entrance
+        function runEntranceAnimation() {
+            chartGroup.scale.set(1, 0.001, 1);
+            new TWEEN.Tween(chartGroup.scale)
+                .to({ x: 1, y: 1, z: 1 }, 1400)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+        }
+        runEntranceAnimation();
+
+        // ==========================================
+        // 10. FLIGHT TOUR SIMULATION MODE
+        // ==========================================
+        let isTourActive = false;
+        let tourTween = null;
+        const tourBanner = document.getElementById('tour-banner');
+        const tourStatusText = document.getElementById('tour-status-text');
+        const btnFlightTour = document.getElementById('btn-flight-tour');
+        const btnStopTour = document.getElementById('btn-stop-tour');
+
+        function startFlightTour() {
+            isTourActive = true;
+            controls.autoRotate = false;
+            btnAutoRotate.classList.remove('active');
+            btnFlightTour.classList.add('active');
+            tourBanner.classList.add('active');
+            playSound('whoosh');
+
+            let tourIndex = 0;
+
+            function flyNext() {
+                if (!isTourActive) return;
+                if (tourIndex >= dataPoints.length) {
+                    tourIndex = 0; // Loop or finish
+                }
+
+                const pt = dataPoints[tourIndex];
+                tourStatusText.innerHTML = `✈️ Menelusuri: <strong>${pt.data.month} 2026</strong> (${pt.data.flights.toLocaleString('id-ID')} penerbangan)`;
+                selectMonth(tourIndex, false);
+
+                // Swoop camera alongside plane
+                new TWEEN.Tween(camera.position)
+                    .to({ x: pt.x + 8, y: pt.y + 6, z: 18 }, 1600)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .start();
+
+                new TWEEN.Tween(controls.target)
+                    .to({ x: pt.x, y: pt.y + 1, z: 0 }, 1600)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .onComplete(() => {
+                        if (isTourActive) {
+                            setTimeout(() => {
+                                tourIndex++;
+                                flyNext();
+                            }, 1200);
+                        }
+                    })
+                    .start();
+            }
+
+            flyNext();
+        }
+
+        function stopFlightTour() {
+            isTourActive = false;
+            btnFlightTour.classList.remove('active');
+            tourBanner.classList.remove('active');
+            playSound('beep');
+        }
+
+        btnFlightTour.addEventListener('click', () => {
+            if (isTourActive) {
+                stopFlightTour();
+            } else {
+                startFlightTour();
+            }
+        });
+
+        btnStopTour.addEventListener('click', stopFlightTour);
+
+        // ==========================================
+        // 11. CAMERA PRESETS & CONTROL DECK
+        // ==========================================
+        const btnPreset3D = document.getElementById('btn-preset-3d');
+        const btnPresetFront = document.getElementById('btn-preset-front');
+        const btnPresetTop = document.getElementById('btn-preset-top');
+        const btnAutoRotate = document.getElementById('btn-autorotate');
+        const btnToggleBadges = document.getElementById('btn-toggle-badges');
+
+        function setCamView(pos, target, duration = 900) {
+            stopFlightTour();
+            new TWEEN.Tween(camera.position)
+                .to(pos, duration)
+                .easing(TWEEN.Easing.Cubic.InOut)
+                .start();
+
+            new TWEEN.Tween(controls.target)
+                .to(target, duration)
+                .easing(TWEEN.Easing.Cubic.InOut)
+                .start();
+            playSound('beep');
+        }
+
+        btnPreset3D.addEventListener('click', () => {
+            [btnPreset3D, btnPresetFront, btnPresetTop].forEach(b => b.classList.remove('active'));
+            btnPreset3D.classList.add('active');
+            setCamView({ x: 18, y: 16, z: 28 }, { x: 0, y: 5, z: 0 });
+        });
+
+        btnPresetFront.addEventListener('click', () => {
+            [btnPreset3D, btnPresetFront, btnPresetTop].forEach(b => b.classList.remove('active'));
+            btnPresetFront.classList.add('active');
+            setCamView({ x: 0, y: 5.5, z: 34 }, { x: 0, y: 5.5, z: 0 });
+        });
+
+        btnPresetTop.addEventListener('click', () => {
+            [btnPreset3D, btnPresetFront, btnPresetTop].forEach(b => b.classList.remove('active'));
+            btnPresetTop.classList.add('active');
+            setCamView({ x: 0, y: 36, z: 0.1 }, { x: 0, y: 0, z: 0 });
+        });
+
+        btnAutoRotate.addEventListener('click', () => {
+            controls.autoRotate = !controls.autoRotate;
+            controls.autoRotateSpeed = 1.6;
+            btnAutoRotate.classList.toggle('active', controls.autoRotate);
+            playSound('beep');
+        });
+
+        let badgesVisible = true;
+        btnToggleBadges.addEventListener('click', () => {
+            badgesVisible = !badgesVisible;
+            badgeGroup.visible = badgesVisible;
+            btnToggleBadges.classList.toggle('active', !badgesVisible);
+            playSound('beep');
+        });
+
+        // ==========================================
+        // 12. RAYCASTING & INTERACTIVE TOOLTIP
+        // ==========================================
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(-999, -999);
+        const tooltip = document.getElementById('chart-tooltip');
+        const ttMonth = document.getElementById('tt-month');
+        const ttValue = document.getElementById('tt-value');
+        const ttDom = document.getElementById('tt-dom');
+        const ttInt = document.getElementById('tt-int');
+        const ttNote = document.getElementById('tt-note');
+        let hoveredSphere = null;
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            if (hoveredSphere) {
+                tooltip.style.left = `${e.clientX}px`;
+                tooltip.style.top = `${e.clientY - 22}px`;
+            }
+        });
+
+        window.addEventListener('click', () => {
+            if (hoveredSphere) {
+                selectMonth(hoveredSphere.userData.index, true);
+                playSound('beep');
+            }
+        });
+
+        function checkRaycast() {
+            if (isTourActive) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactableSpheres, false);
+
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                if (hoveredSphere !== target) {
+                    if (hoveredSphere && hoveredSphere.userData.index !== currentSelectedIdx) {
+                        new TWEEN.Tween(hoveredSphere.scale).to({ x: 1, y: 1, z: 1 }, 150).start();
+                    }
+                    hoveredSphere = target;
+                    new TWEEN.Tween(hoveredSphere.scale)
+                        .to({ x: 1.65, y: 1.65, z: 1.65 }, 180)
+                        .easing(TWEEN.Easing.Back.Out)
+                        .start();
+
+                    const data = target.userData.data;
+                    ttMonth.textContent = `${data.month.toUpperCase()} 2026`;
+                    ttValue.textContent = data.flights.toLocaleString('id-ID');
+                    ttDom.textContent = data.domestic.toLocaleString('id-ID');
+                    ttInt.textContent = data.intl.toLocaleString('id-ID');
+                    ttNote.textContent = data.peak ? `🔥 ${data.note}` : `✈️ ${data.note}`;
+
+                    tooltip.style.display = 'block';
+                    document.body.style.cursor = 'pointer';
+                }
+            } else {
+                if (hoveredSphere) {
+                    if (hoveredSphere.userData.index !== currentSelectedIdx) {
+                        new TWEEN.Tween(hoveredSphere.scale).to({ x: 1, y: 1, z: 1 }, 180).start();
+                    }
+                    hoveredSphere = null;
+                    tooltip.style.display = 'none';
+                    document.body.style.cursor = 'default';
+                }
+            }
+        }
+
+        // Window Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ==========================================
+        // 13. MAIN RENDER LOOP & PROCEDURAL DYNAMICS
+        // ==========================================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            TWEEN.update();
+            controls.update();
+            checkRaycast();
+
+            // Subtle bobbing motion for the 3D Airplane
+            if (!isTourActive) {
+                lionJet.position.y = (dataPoints[currentSelectedIdx].y + 1.8) + Math.sin(elapsedTime * 2.5) * 0.12;
+                lionJet.rotation.z = Math.sin(elapsedTime * 1.8) * 0.04;
+            }
+
+            // Update airplane contrail points
+            const currentPlanePos = lionJet.position.clone();
+            currentPlanePos.x -= 1.8; // Tail position
+            trailPoints.unshift(currentPlanePos);
+            if (trailPoints.length > maxTrail) trailPoints.pop();
+            trailGeo.setFromPoints(trailPoints);
+
+            // Rotate ground radar ring slowly
+            radarRing.rotation.z = elapsedTime * 0.25;
+
+            // Subtle floating drift for dust particles
+            dustParticles.rotation.y = elapsedTime * 0.02;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
